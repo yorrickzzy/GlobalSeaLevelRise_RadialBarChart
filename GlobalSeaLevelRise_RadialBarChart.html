@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://d3js.org/d3.v7.min.js"></script>  
+    <title>Final Project</title>
+    <style>
+        #menu {
+            margin-bottom: 20px;
+        }
+        #currentYearRange {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <a href="../combined.html">Go back to Main Page</a>
+    <h2>Global Sea Level Difference (mm)</h2>
+    <div id="menu">
+        <label for="yearRange">Select Year Range: </label>
+        <select id="yearRange">
+            <option value="1921-1940">1921-1940</option>
+            <option value="1941-1960">1941-1960</option>
+            <option value="1961-1980">1961-1980</option>
+            <option value="1981-2000">1981-2000</option>
+            <option value="2001-2022">2001-2022</option>
+        </select>
+        <button id="playButton">Play</button>
+        <button id="pauseButton">Pause</button>
+    </div>
+
+    <div id="radialBarChart"></div>
+    <div id="currentYearRange">Current Range: 1921-1940</div>
+
+    <script type="text/javascript">
+        const width = 800;
+        const height = 800;
+        const innerRadius = 100;
+        const outerRadius = Math.min(width, height) / 2 - 50;
+
+        const svg = d3.select("#radialBarChart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+        const yearRanges = ["1921-1940", "1941-1960", "1961-1980", "1981-2000", "2001-2022"];
+        let currentIndex = 0;
+        let intervalId;
+
+        function drawChart(yearRange) {
+            let csvFile;
+            let radiusDomain, rangeSteps;
+
+            if (yearRange === '1921-1940') {
+                csvFile = 'Global_sea_level_rise(1921-1940).csv';  
+                radiusDomain = [-140, -100];  
+                rangeSteps = d3.range(-140, -99, 10);  
+            } else if (yearRange === '1941-1960') {
+                csvFile = 'Global_sea_level_rise(1941-1960).csv';  
+                radiusDomain = [-120, -60];  
+                rangeSteps = d3.range(-120, -59, 10);  
+            } else if (yearRange === '1961-1980') {
+                csvFile = 'Global_sea_level_rise(1961-1980).csv';
+                radiusDomain = [-80, -40];  
+                rangeSteps = d3.range(-80, -39, 10);  
+            } else if (yearRange === '1981-2000') {
+                csvFile = 'Global_sea_level_rise(1981-2000).csv';
+                radiusDomain = [-40, 10];  
+                rangeSteps = d3.range(-40, 11, 10);  
+            } else {
+                csvFile = 'Global_sea_level_rise(2001-2022).csv';
+                radiusDomain = [0, 70];  
+                rangeSteps = d3.range(0, 71, 10);  
+            }
+
+            d3.csv(csvFile).then(data => {
+                data.forEach(d => {
+                    d.mm = +d.mm; 
+                });
+
+                const angleScale = d3.scaleBand()
+                    .domain(data.map(d => d.year))
+                    .range([0, 2 * Math.PI])
+                    .align(0);
+
+                const radiusScale = d3.scaleLinear()
+                    .domain(radiusDomain)
+                    .range([innerRadius, outerRadius]);
+
+                svg.selectAll("*").remove();  
+
+                const rangeColor = "#ccc";
+                const rangeTextOffset = 10;
+
+                svg.selectAll(".range-circle")
+                    .data(rangeSteps)
+                    .enter()
+                    .append("circle")
+                    .attr("class", "range-circle")
+                    .attr("r", d => radiusScale(d))
+                    .attr("stroke", rangeColor)
+                    .attr("fill", "none");
+
+                svg.selectAll(".range-label")
+                    .data(rangeSteps)
+                    .enter()
+                    .append("text")
+                    .attr("class", "range-label")
+                    .attr("x", 0)
+                    .attr("y", d => -radiusScale(d) - rangeTextOffset)
+                    .attr("dy", "-0.35em")
+                    .attr("text-anchor", "middle")
+                    .text(d => `${d} mm`)
+                    .style("font-size", "12px")
+                    .style("fill", "#666");
+
+                const arc = d3.arc()
+                    .innerRadius(innerRadius)
+                    .outerRadius(d => radiusScale(d.mm))
+                    .startAngle(d => angleScale(d.year))
+                    .endAngle(d => angleScale(d.year) + angleScale.bandwidth())
+                    .padAngle(0.01)
+                    .padRadius(innerRadius);
+
+                svg.selectAll("path")
+                    .data(data)
+                    .enter()
+                    .append("path")
+                    .attr("class", "bar")
+                    .attr("d", arc)
+                    .attr("fill", (d, i) => d3.interpolateCool(i / data.length))
+                    .style("fill-opacity", 0.7)
+                    .on("mouseover", function () {
+                        d3.select(this).style("fill-opacity", 1);
+                    })
+                    .on("mouseout", function () {
+                        d3.select(this).style("fill-opacity", 0.7);
+                    });
+
+                svg.selectAll("text.year-label")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .attr("class", "year-label")
+                    .attr("transform", d => {
+                        const angle = (angleScale(d.year) + angleScale.bandwidth() / 2) - Math.PI / 2;
+                        const x = Math.cos(angle) * (innerRadius - 30);
+                        const y = Math.sin(angle) * (innerRadius - 30);
+                        return `translate(${x}, ${y})`;
+                    })
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "middle")
+                    .text(d => d.year)
+                    .style("font-size", "12px");
+            });
+        }
+
+        function updateYearRangeDisplay(yearRange) {
+            d3.select("#currentYearRange").text(`Current Range: ${yearRange}`);
+        }
+
+        function updateSelectMenu(yearRange) {
+            d3.select("#yearRange").property("value", yearRange);
+        }
+
+        function startAnimation() {
+            intervalId = setInterval(() => {
+                currentIndex = (currentIndex + 1) % yearRanges.length;
+                const yearRange = yearRanges[currentIndex];
+                drawChart(yearRange);
+                updateYearRangeDisplay(yearRange);
+                updateSelectMenu(yearRange);  
+            }, 2000); 
+        }
+
+        function stopAnimation() {
+            clearInterval(intervalId);
+        }
+
+        drawChart('1921-1940');
+        updateYearRangeDisplay('1921-1940');
+        updateSelectMenu('1921-1940');
+
+        d3.select("#yearRange").on("change", function () {
+            const selectedYearRange = d3.select(this).property("value");
+            drawChart(selectedYearRange);
+            updateYearRangeDisplay(selectedYearRange);
+            stopAnimation();  
+        });
+
+        d3.select("#playButton").on("click", function () {
+            startAnimation();
+        });
+
+        d3.select("#pauseButton").on("click", function () {
+            stopAnimation();
+        });
+    </script>
+</body>
+</html>
+
